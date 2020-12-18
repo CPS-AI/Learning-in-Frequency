@@ -37,37 +37,3 @@ def get_dataset(tfrec_path, batch_size, wide, feature_dim, out_dim, shuffle_samp
     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
     dataset = dataset.batch(batch_size)
     return dataset
-
-# def read_and_decode(tfrec_path, wide, feature_dim, out_dim):
-#     dataset = tf.data.TFRecordDataset(tfrec_path)
-
-#     image_feature_description = {
-#         'class': tf.FixedLenFeature([out_dim], tf.float32),
-#         'example': tf.FixedLenFeature([wide*feature_dim], tf.float32),
-#     }
-
-#     features = tf.parse_single_example(dataset,
-#                                       image_feature_description)
-#     return features['example'], features['class']
-
-# def input_pipeline(tfrec_path, batch_size, wide, feature_dim, out_dim, shuffle_sample=True, num_epochs=None):
-#     example, label = read_and_decode(tfrec_path, wide, feature_dim, out_dim)
-#     example = tf.expand_dims(example, 0)
-#     example = tf.reshape(example, shape=(wide, feature_dim))
-    
-#     if shuffle_sample:
-
-
-
-#     min_after_dequeue = 1000  # int(0.4*len(csvFileList)) #1000
-#     capacity = min_after_dequeue + 3 * batch_size
-#     if shuffle_sample:
-#         example_batch, label_batch = tf.train.shuffle_batch(
-#             [example, label], batch_size=batch_size, num_threads=16, capacity=capacity,
-#             min_after_dequeue=min_after_dequeue)
-#     else:
-#         example_batch, label_batch = tf.train.batch(
-#             [example, label], batch_size=batch_size, num_threads=16)
-
-#     return example_batch, label_batch
-

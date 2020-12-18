@@ -1,5 +1,9 @@
 import tensorflow as tf
 
+def create_variable(name, shape, initializer):
+	variable = tf.Variable(initializer(shape=shape), name=name)
+	return variable
+
 class STFLayer(tf.keras.layers.Layer):
 
 	def __init__(self,
@@ -25,10 +29,12 @@ class STFLayer(tf.keras.layers.Layer):
 		self.reuse = reuse
 		self.mode = mode
 		
-		self.kernel_r = None
-		self.kernel_i = None
-		self.bias_complex_r = None
-		self.bias_complex_i = None
+		self.glorot_initializer = tf.keras.initializers.glorot_uniform()
+		self.zeros_initializer = tf.zeros_initializer()
+		# self.kernel_r = None
+		# self.kernel_i = None
+		# self.bias_complex_r = None
+		# self.bias_complex_i = None
 
 
 	def call(self, inputs):
@@ -47,8 +53,6 @@ class STFLayer(tf.keras.layers.Layer):
 		if inputs.get_shape()[-1] == self.c_in:
 			inputs = tf.transpose(inputs, [0, 2, 1])
 			
-		# print("inputs.shape: ", inputs.shape)
-
 		patch_fft_list = []
 		patch_mask_list = []
 		for idx in range(len(self.fft_list)):
@@ -177,7 +181,6 @@ class STFLayer(tf.keras.layers.Layer):
 		patch_time_final = tf.concat(patch_time_list, 2)
 		patch_time_final = tf.reshape(patch_time_final, 
 										[-1, inputs.shape[-1], self.c_out])
-		# print("patch_time_final: ", patch_time_final)
 		
 		if self.mode == 'filter':
 			patch_time_final = tf.nn.bias_add(patch_time_final, tf.math.real(patch_bias))
@@ -201,27 +204,10 @@ class STFLayer(tf.keras.layers.Layer):
 			use_bias: A boolean value. Whether use bias or not.
 		'''
 		c_out = int(c_out_total/len(fft_list))
+	
+		kernel_r = self.glorot_initializer(shape=(1, 1, int(fft_n/2+1), c_in*c_out))
+		kernel_i = self.glorot_initializer(shape=(1, 1, int(fft_n/2+1), c_in*c_out))
 
-		# Remove 'real' ty
-		# 'real' why fft?
-		# if filter_type == 'real':
-		# 	# kernel = tf.Variable('kernel', shape = [1, 1, c_in*c_out, fft_n],
-		# 	# 				initializer=tf.keras.initializers.glorot_uniform())
-		# 	kernel = tf.Variable(lambda: tf.keras.initializers.glorot_uniform()(
-		# 		shape=[1, 1, c_in*c_out, fft_n]))
-
-		# 	kernel_complex_org = tf.signal.fft(tf.complex(kernel, 0.*kernel))
-		# 	kernel_complex_org = tf.transpose(kernel_complex_org, [0, 1, 3, 2])
-		# 	kernel_complex_org = kernel_complex_org[:,:,:int(int(fft_n)/2+1),:]
-		# elif filter_type == 'complex':
-		# kernel_r = tf.Variable('kernel_real', shape = [1, 1, fft_n/2+1, c_in*c_out],
-		# 					initializer=tf.keras.initializers.glorot_uniform())
-		# kernel_i = tf.Variable('kernel_imag', shape = [1, 1, fft_n/2+1, c_in*c_out],
-		# 					initializer=tf.keras.initializers.glorot_uniform())
-		kernel_r = tf.Variable(lambda: tf.keras.initializers.glorot_uniform()(
-			shape=[1, 1, int(fft_n/2+1), c_in*c_out]))
-		kernel_i = tf.Variable(lambda: tf.keras.initializers.glorot_uniform()(
-			shape=[1, 1, int(fft_n/2+1), c_in*c_out]))
 		kernel_complex_org = tf.complex(kernel_r, kernel_i)
 
 		kernel_complex_dict = {}
@@ -262,10 +248,13 @@ class STFLayer(tf.keras.layers.Layer):
 			# 							initializer=tf.keras.initializers.glorot_uniform())
 			# kernel_r = tf.Variable(lambda: self.initializer(shape=[1, 1, int(fft_n/2+1), c_in*c_out]))
 
-			bias_complex_r = tf.Variable(lambda: tf.keras.initializers.glorot_uniform()(
-				shape=[c_out*len(fft_list)]))
-			bias_complex_i = tf.Variable(lambda: tf.keras.initializers.glorot_uniform()(
-				shape=[c_out*len(fft_list)]))
+			# bias_complex_r = tf.Variable(lambda: tf.keras.initializers.glorot_uniform()(
+			# 	shape=[c_out*len(fft_list)]))
+			# bias_complex_i = tf.Variable(lambda: tf.keras.initializers.glorot_uniform()(
+			# 	shape=[c_out*len(fft_list)]))
+
+			bias_complex_r = self.glorot_initializer(shape=[c_out*len(fft_list)])
+			bias_complex_i = self.glorot_initializer(shape=[c_out*len(fft_list)])
 
 			bias_complex = tf.complex(bias_complex_r, bias_complex_i, name='bias')
 			return kernel_complex_dict, bias_complex
@@ -292,16 +281,22 @@ class STFLayer(tf.keras.layers.Layer):
 		return in_patch[:,:,:out_fft_n,:]
 
 	def _complex_merge(self, merge_ratio):
-		kernel = tf.Variable(lambda: tf.zeros_initializer()(
-			shape=[1, 1, 1, 1, merge_ratio, 2*(merge_ratio+1)]))
+		# kernel = tf.Variable(lambda: tf.zeros_initializer()(
+		# 	shape=[1, 1, 1, 1, merge_ratio, 2*(merge_ratio+1)]))
+		kernel = self.zeros_initializer(
+			shape=(1, 1, 1, 1, merge_ratio, 2*(merge_ratio+1)))
 		kernel_complex = tf.signal.fft(tf.complex(kernel, 0.*kernel))
 		kernel_complex = kernel_complex[:, :, :, :, :, 1:(merge_ratio+1)]
 		kernel_complex = tf.transpose(kernel_complex, [0, 1, 2, 3, 5, 4])
 
-		bias_complex_r = tf.Variable(lambda: tf.zeros_initializer()(
-			shape=[merge_ratio]))
-		bias_complex_i = tf.Variable(lambda: tf.zeros_initializer()(
-			shape=[merge_ratio]))
+		# bias_complex_r = tf.Variable(lambda: tf.zeros_initializer()(
+		# 	shape=[merge_ratio]))
+		# bias_complex_i = tf.Variable(lambda: tf.zeros_initializer()(
+		# 	shape=[merge_ratio]))
+		bias_complex_r = self.zeros_initializer(
+			shape=(merge_ratio))
+		bias_complex_i = self.zeros_initializer(
+			shape=(merge_ratio))
 		bias_complex = tf.complex(bias_complex_r, bias_complex_i, name='bias')
 
 		return kernel_complex, bias_complex
