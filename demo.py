@@ -51,7 +51,7 @@ def main():
 	model = STFNet(BATCH_SIZE, FFT_LIST, KERNEL_LEN_LIST, MODE)
 
 	model.compile(
-				optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001,
+				optimizer=tf.keras.optimizers.Adam(learning_rate=0.001,
 												beta_1=0.9,
 												beta_2=0.99), 
 				loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),

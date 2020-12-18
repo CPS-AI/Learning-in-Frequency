@@ -3,7 +3,7 @@ import math
 
 import tensorflow as tf
 
-from stflayer import STFLayer
+from stf_filter_layer import STFFilterLayer
 
 class STFNet(tf.keras.Model):
 	def __init__(self, 
@@ -30,7 +30,7 @@ class STFNet(tf.keras.Model):
 		self.dropout_rate = dropout_rate
 		self.reuse = True
 
-		self.acc_layer1 = STFLayer(self.fft_list, 
+		self.acc_layer1 = STFFilterLayer(self.fft_list, 
 								self.kernel_len_list,
 								self.sensor_axis, 
 								self.c_out,
@@ -42,7 +42,7 @@ class STFNet(tf.keras.Model):
 		self.acc_dropout1 = tf.keras.layers.Dropout(self.dropout_rate,
 								noise_shape=[self.batch_size, 1, self.c_out],
 								name='acc_dropout1')
-		self.acc_layer2 = STFLayer(self.fft_list, 
+		self.acc_layer2 = STFFilterLayer(self.fft_list, 
 								self.kernel_len_list,
 								self.c_out, 
 								self.c_out,
@@ -54,7 +54,7 @@ class STFNet(tf.keras.Model):
 		self.acc_dropout2 = tf.keras.layers.Dropout(self.dropout_rate,
 								noise_shape=[self.batch_size, 1, self.c_out],
 								name='acc_dropout2')
-		self.acc_layer3 = STFLayer(self.fft_list, 
+		self.acc_layer3 = STFFilterLayer(self.fft_list, 
 								self.kernel_len_list,
 								self.c_out, 
 								int(self.c_out/2),
@@ -67,7 +67,7 @@ class STFNet(tf.keras.Model):
 								noise_shape=[self.batch_size, 1, int(self.c_out/2)],
 								name='acc_dropout3')
 
-		self.gyr_layer1 = STFLayer(self.fft_list, 
+		self.gyr_layer1 = STFFilterLayer(self.fft_list, 
 								self.kernel_len_list,
 								self.sensor_axis, 
 								self.c_out,
@@ -79,7 +79,7 @@ class STFNet(tf.keras.Model):
 		self.gyr_dropout1 = tf.keras.layers.Dropout(self.dropout_rate,
 								noise_shape=[self.batch_size, 1, self.c_out],
 								name='gyr_dropout1')
-		self.gyr_layer2 = STFLayer(self.fft_list, 
+		self.gyr_layer2 = STFFilterLayer(self.fft_list, 
 								self.kernel_len_list,
 								self.c_out, 
 								self.c_out,
@@ -91,7 +91,7 @@ class STFNet(tf.keras.Model):
 		self.gyr_dropout2 = tf.keras.layers.Dropout(self.dropout_rate,
 								noise_shape=[self.batch_size, 1, self.c_out],
 								name='gyr_dropout2')
-		self.gyr_layer3 = STFLayer(self.fft_list, 
+		self.gyr_layer3 = STFFilterLayer(self.fft_list, 
 								self.kernel_len_list,
 								self.c_out, 
 								int(self.c_out/2),
@@ -104,7 +104,7 @@ class STFNet(tf.keras.Model):
 								noise_shape=[self.batch_size, 1, int(self.c_out/2)],
 								name='gyr_dropout3')
 
-		self.fusion_layer1 = STFLayer(self.fft_list, 
+		self.fusion_layer1 = STFFilterLayer(self.fft_list, 
 								self.kernel_len_list,
 								self.c_out, 
 								self.c_out,
@@ -116,7 +116,7 @@ class STFNet(tf.keras.Model):
 		self.fusion_dropout1 = tf.keras.layers.Dropout(self.dropout_rate,
 								noise_shape=[self.batch_size, 1, self.c_out],
 								name='gyr_dropout1')
-		self.fusion_layer2 = STFLayer(self.fft_list, 
+		self.fusion_layer2 = STFFilterLayer(self.fft_list, 
 						self.kernel_len_list,
 						self.c_out, 
 						self.c_out,
@@ -128,7 +128,7 @@ class STFNet(tf.keras.Model):
 		self.fusion_dropout2 = tf.keras.layers.Dropout(self.dropout_rate,
 								noise_shape=[self.batch_size, 1, self.c_out],
 								name='gyr_dropout2')
-		self.fusion_layer3 = STFLayer(self.fft_list, 
+		self.fusion_layer3 = STFFilterLayer(self.fft_list, 
 						self.kernel_len_list,
 						self.c_out, 
 						self.c_out,

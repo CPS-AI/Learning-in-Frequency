@@ -4,7 +4,7 @@ def create_variable(name, shape, initializer):
 	variable = tf.Variable(initializer(shape=shape), name=name)
 	return variable
 
-class STFLayer(tf.keras.layers.Layer):
+class STFFilterLayer(tf.keras.layers.Layer):
 
 	def __init__(self,
 				fft_list,
@@ -20,7 +20,7 @@ class STFLayer(tf.keras.layers.Layer):
 			input:
 			fft_list:
 		'''
-		super(STFLayer, self).__init__(name=name)	
+		super(STFFilterLayer, self).__init__(name=name)	
 		self.fft_list = fft_list
 		self.kernel_len_list = kernel_len_list
 		self.c_in = c_in
