@@ -9,8 +9,7 @@ class STFNet(tf.keras.Model):
 	def __init__(self, 
 				batch_size,
 				fft_list, 
-				kernel_len_list, 
-				mode,
+				kernel_size, 
 				class_num = 10,
 				sensor_axis=3,
 				c_out=64,
@@ -21,8 +20,7 @@ class STFNet(tf.keras.Model):
 		super(STFNet, self).__init__(name=name)
 		self.batch_size = batch_size
 		self.fft_list = fft_list
-		self.kernel_len_list = kernel_len_list
-		self.mode = mode
+		self.kernel_size = kernel_size
 		self.class_num = class_num
 		self.sensor_axis = 3
 		self.c_out = 64
@@ -31,110 +29,101 @@ class STFNet(tf.keras.Model):
 		self.reuse = True
 
 		self.acc_layer1 = STFFilterLayer(self.fft_list, 
-								self.kernel_len_list,
+								self.kernel_size,
 								self.sensor_axis, 
 								self.c_out,
 								self.act_domain, 
 								self.reuse,
-								self.mode,
 								'acc_layer1'
 								)
 		self.acc_dropout1 = tf.keras.layers.Dropout(self.dropout_rate,
 								noise_shape=[self.batch_size, 1, self.c_out],
 								name='acc_dropout1')
 		self.acc_layer2 = STFFilterLayer(self.fft_list, 
-								self.kernel_len_list,
+								self.kernel_size,
 								self.c_out, 
 								self.c_out,
 								self.act_domain, 
 								self.reuse,
-								self.mode,
 								'acc_layer2'
 								)
 		self.acc_dropout2 = tf.keras.layers.Dropout(self.dropout_rate,
 								noise_shape=[self.batch_size, 1, self.c_out],
 								name='acc_dropout2')
 		self.acc_layer3 = STFFilterLayer(self.fft_list, 
-								self.kernel_len_list,
+								self.kernel_size,
 								self.c_out, 
-								int(self.c_out/2),
+								self.c_out//2,
 								self.act_domain, 
 								self.reuse,
-								self.mode,
 								'acc_layer3'
 								)
 		self.acc_dropout3 = tf.keras.layers.Dropout(self.dropout_rate,
-								noise_shape=[self.batch_size, 1, int(self.c_out/2)],
+								noise_shape=[self.batch_size, 1, self.c_out//2],
 								name='acc_dropout3')
 
 		self.gyr_layer1 = STFFilterLayer(self.fft_list, 
-								self.kernel_len_list,
+								self.kernel_size,
 								self.sensor_axis, 
 								self.c_out,
 								self.act_domain, 
 								self.reuse,
-								self.mode,
 								'gyr_layer1'
 								)
 		self.gyr_dropout1 = tf.keras.layers.Dropout(self.dropout_rate,
 								noise_shape=[self.batch_size, 1, self.c_out],
 								name='gyr_dropout1')
 		self.gyr_layer2 = STFFilterLayer(self.fft_list, 
-								self.kernel_len_list,
+								self.kernel_size,
 								self.c_out, 
 								self.c_out,
 								self.act_domain, 
 								self.reuse,
-								self.mode,
 								'gyr_layer2'
 								)
 		self.gyr_dropout2 = tf.keras.layers.Dropout(self.dropout_rate,
 								noise_shape=[self.batch_size, 1, self.c_out],
 								name='gyr_dropout2')
 		self.gyr_layer3 = STFFilterLayer(self.fft_list, 
-								self.kernel_len_list,
+								self.kernel_size,
 								self.c_out, 
-								int(self.c_out/2),
+								self.c_out//2,
 								self.act_domain, 
 								self.reuse,
-								self.mode,
 								'gyr_layer3'
 								)
 		self.gyr_dropout3 = tf.keras.layers.Dropout(self.dropout_rate,
-								noise_shape=[self.batch_size, 1, int(self.c_out/2)],
+								noise_shape=[self.batch_size, 1, self.c_out//2],
 								name='gyr_dropout3')
 
 		self.fusion_layer1 = STFFilterLayer(self.fft_list, 
-								self.kernel_len_list,
+								self.kernel_size,
 								self.c_out, 
 								self.c_out,
 								self.act_domain, 
 								self.reuse,
-								self.mode,
 								'fusion_layer1'
 								)
 		self.fusion_dropout1 = tf.keras.layers.Dropout(self.dropout_rate,
 								noise_shape=[self.batch_size, 1, self.c_out],
 								name='gyr_dropout1')
 		self.fusion_layer2 = STFFilterLayer(self.fft_list, 
-						self.kernel_len_list,
+						self.kernel_size,
 						self.c_out, 
 						self.c_out,
 						self.act_domain, 
 						self.reuse,
-						self.mode,
 						'fusion_layer2'
 						)
 		self.fusion_dropout2 = tf.keras.layers.Dropout(self.dropout_rate,
 								noise_shape=[self.batch_size, 1, self.c_out],
 								name='gyr_dropout2')
 		self.fusion_layer3 = STFFilterLayer(self.fft_list, 
-						self.kernel_len_list,
+						self.kernel_size,
 						self.c_out, 
 						self.c_out,
 						self.act_domain, 
 						self.reuse,
-						self.mode,
 						'fusion_layer3'
 						)
 		self.fusion_dropout3 = tf.keras.layers.Dropout(self.dropout_rate,
