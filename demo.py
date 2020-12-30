@@ -17,8 +17,11 @@ CLASS_NUM = 10
 EPOCH_NUM = 10000000
 SAVE_EPOCH_NUM = 500
 
-TRAIN_TFRECORD = os.path.join("tfrecords", "train_0-17siebel_all_speaker.tfrecord")
-TEST_TFRECORD = os.path.join("tfrecords", "eval_0-17siebel_all_speaker.tfrecord")
+# TRAIN_TFRECORD = os.path.join("tfrecords", "train_0-17siebel_all_speaker.tfrecord")
+# TEST_TFRECORD = os.path.join("tfrecords", "eval_0-17siebel_all_speaker.tfrecord")
+
+TRAIN_TFRECORD = os.path.join("tfrecords", "New10Digits", "train.tfrecord")
+TEST_TFRECORD = os.path.join("tfrecords", "New10Digits", "eval.tfrecord")
 
 os.environ["CUDA_VISIBLE_DEVICES"]="0"
 

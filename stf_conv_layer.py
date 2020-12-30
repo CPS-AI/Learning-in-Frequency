@@ -1,4 +1,5 @@
 import tensorflow as tf
+import ops
 
 class STFConvLayer(tf.keras.layers.Layer):
 
@@ -8,14 +9,15 @@ class STFConvLayer(tf.keras.layers.Layer):
 				c_in,
 				c_out, 
 				act_domain,
-				kernel_domain='freq',
-				name):
+				name,
+				kernel_domain='freq'
+				):
 		'''
 		Args:
 			input:
 			fft_list:
 		'''
-		super(STFFilterLayer, self).__init__(name=name)	
+		super(STFConvLayer, self).__init__(name=name)	
 		self.fft_list = fft_list
 		self.kernel_size = kernel_size
 		self.c_in = c_in
@@ -27,10 +29,10 @@ class STFConvLayer(tf.keras.layers.Layer):
 		self.zeros_initializer = tf.zeros_initializer()
 
 	def call(self, inputs):
-		patch_kernel_dict, patch_bias = self._initialize_stf_kernels(self.c_in, 
-																	self.c_out, 
-																	self.kernel_size, 
-																	use_bias=False)
+		conv_kernel_dict = self.__initialize_stf_kernels(self.c_in, 
+														self.c_out, 
+														self.kernel_size, 
+														use_bias=False)
 
 		# [batch, feature, time]
 		inputs = tf.transpose(inputs, [0, 2, 1])
@@ -71,25 +73,25 @@ class STFConvLayer(tf.keras.layers.Layer):
 						patch_mask = patch_mask - exist_mask
 					patch_fft_list[fft_idx2] = patch_fft_list[fft_idx2] + patch_mask*patch_fft
 				else:
-					time_ratio = int(tar_fft_n/fft_n)
+					time_ratio = tar_fft_n//fft_n
 					patch_fft_mod = tf.reshape(patch_fft, 
-						[-1, int(inputs.shape[-1]/tar_fft_n), time_ratio, int(fft_n/2)+1, self.c_in])
+						[-1, inputs.shape[-1]//tar_fft_n, time_ratio, fft_n//2+1, self.c_in])
 					
 					patch_fft_mod = tf.transpose(patch_fft_mod, [0, 1, 3, 4, 2])
 
-					merge_kernel, merge_bias = self._complex_merge(time_ratio)
+					merge_kernel, merge_bias = self.__complex_merge(time_ratio)
 					
-					patch_fft_mod = self._atten_merge(patch_fft_mod, merge_kernel, merge_bias)*float(time_ratio)
+					patch_fft_mod = ops.atten_merge(patch_fft_mod, merge_kernel, merge_bias)*float(time_ratio)
 					
 					patch_mask = tf.ones_like(patch_fft_mod)
-					patch_mask = self._zero_interp(patch_mask, time_ratio, inputs.shape[-1]/tar_fft_n, 
-									int(fft_n/2)+1, int(tar_fft_n/2)+1, self.c_in)
+					patch_mask = self.__zero_interp(patch_mask, time_ratio, inputs.shape[-1]//tar_fft_n, 
+									fft_n//2+1, tar_fft_n//2+1, self.c_in)
 					for exist_mask in patch_mask_list[fft_idx2]:
 						patch_mask = patch_mask - exist_mask
 					patch_mask_list[fft_idx2].append(patch_mask)
 
-					patch_fft_mod = self._zero_interp(patch_fft_mod, time_ratio, inputs.shape[-1]/tar_fft_n, 
-									int(fft_n/2)+1, int(tar_fft_n/2)+1, self.c_in)
+					patch_fft_mod = self.__zero_interp(patch_fft_mod, time_ratio, inputs.shape[-1]//tar_fft_n, 
+									fft_n//2+1, tar_fft_n//2+1, self.c_in)
 
 					patch_fft_list[fft_idx2] = patch_fft_list[fft_idx2] + patch_mask*patch_fft_mod
 
@@ -122,9 +124,9 @@ class STFConvLayer(tf.keras.layers.Layer):
 				conv_kernel_i = tf.expand_dims(conv_kernel_i, 2)
 				zero_f = tf.tile(tf.zeros_like(conv_kernel_r), [1, 1, d_len-1, 1, 1])
 				conv_kernel_r = tf.reshape(tf.concat([conv_kernel_r, zero_f], 2), 
-										[1, k_len*d_len, c_in, c_out//len(fft_n_list)])
+										[1, k_len*d_len, self.c_in, self.c_out//len(self.fft_list)])
 				conv_kernel_i = tf.reshape(tf.concat([conv_kernel_i, zero_f], 2),
-										[1, k_len*d_len, c_in, c_out//len(fft_n_list)])
+										[1, k_len*d_len, self.c_in, self.c_out//len(self.fft_list)])
 				conv_kernel_r = conv_kernel_r[:,:(k_len*d_len-d_len+1),:,:]
 				conv_kernel_i = conv_kernel_i[:,:(k_len*d_len-d_len+1),:,:]
 
@@ -158,19 +160,17 @@ class STFConvLayer(tf.keras.layers.Layer):
 		patch_time_final = tf.reshape(patch_time_final, 
 										[-1, inputs.shape[-1], self.c_out])
 		
-		patch_time_final = tf.nn.bias_add(patch_time_final, tf.math.real(patch_bias))
-
 		if self.act_domain == 'time':
 			patch_time_final = tf.nn.leaky_relu(patch_time_final)
 
 		return patch_time_final
 
-	def _initialize_stf_kernels(self, 
+	def __initialize_stf_kernels(self, 
 							c_in, 
 							c_out_total, 
 							basic_len, 
 							use_bias=True):
-		c_out = int(c_out_total)/len(self.fft_list)
+		c_out = int(c_out_total)//len(self.fft_list)
 		if self.kernel_domain == 'freq':
 			kernel_r = self.glorot_initializer(shape=[1, basic_len, c_in, c_out])
 			kernel_i = self.glorot_initializer(shape=[1, basic_len, c_in, c_out])			
@@ -183,15 +183,8 @@ class STFConvLayer(tf.keras.layers.Layer):
 			kernel_i = tf.imag(kernel_c)
 
 		kernel_dict = {}
-		for _ in range(len(self.fft_list)):
-			if filter_len == basic_len:
-				kernel_dict[filter_len] = [kernel_r, kernel_i]
-			else:
-				kernel_exp_r = tf.image.resize(kernel_r, 
-								[filter_len, c_in], align_corners=True)
-				kernel_exp_i = tf.image.resize(kernel_i, 
-								[filter_len, c_in], align_corners=True)
-				kernel_dict[filter_len] = [kernel_exp_r, kernel_exp_i]
+		kernel_dict[basic_len] = [kernel_r, kernel_i]
+
 		if use_bias: 
 			bias_complex_r = self.glorot_initializer(shape=[c_out]) 
 			bias_complex_i = self.glorot_initializer(shape=[c_out])
@@ -200,18 +193,7 @@ class STFConvLayer(tf.keras.layers.Layer):
 		else:
 			return kernel_dict
 
-	def _atten_merge(self, patch, kernel, bias):
-		## patch with shape (BATCH_SIZE, seg_num, ffn/2+1, c_in, ratio)
-		## kernel with shape (1, 1, 1, 1, ratio, ratio)
-		## bias with shape (ratio)
-		patch_atten = tf.reduce_sum(tf.expand_dims(patch, 5)*kernel, 4)
-		patch_atten = tf.abs(tf.nn.bias_add(patch_atten, bias))
-		patch_atten = tf.nn.softmax(patch_atten)
-		patch_atten = tf.complex(patch_atten, 0*patch_atten)
-
-		return tf.reduce_sum(patch*patch_atten, 4)
-
-	def _zero_interp(self, in_patch, ratio, seg_num, in_fft_n, out_fft_n, f_dim):
+	def __zero_interp(self, in_patch, ratio, seg_num, in_fft_n, out_fft_n, f_dim):
 		in_patch = tf.expand_dims(in_patch, 3)
 		in_patch_zero = tf.tile(tf.zeros_like(in_patch),
 							[1, 1, 1, ratio-1, 1])
@@ -219,7 +201,7 @@ class STFConvLayer(tf.keras.layers.Layer):
 					[-1, int(seg_num), int(in_fft_n*ratio), int(f_dim)])
 		return in_patch[:,:,:out_fft_n,:]
 
-	def _complex_merge(self, merge_ratio):
+	def __complex_merge(self, merge_ratio):
 		# kernel = tf.Variable(lambda: tf.zeros_initializer()(
 		# 	shape=[1, 1, 1, 1, merge_ratio, 2*(merge_ratio+1)]))
 		kernel = self.zeros_initializer(
@@ -236,6 +218,6 @@ class STFConvLayer(tf.keras.layers.Layer):
 			shape=(merge_ratio))
 		bias_complex_i = self.zeros_initializer(
 			shape=(merge_ratio))
-		bias_complex = tf.complex(bias_complex_r, bias_complex_i, name='bias')
+		bias_complex = tf.complex(bias_complex_r, bias_complex_i)
 
 		return kernel_complex, bias_complex

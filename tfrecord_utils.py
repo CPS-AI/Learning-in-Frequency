@@ -10,12 +10,12 @@ def decode_feature(feature, wide, feature_dim):
 
 def read_tfrecord(example, wide, feature_dim, out_dim):
     example_description = {
-        'class': tf.io.FixedLenFeature([out_dim], tf.float32),
+        'label': tf.io.FixedLenFeature([out_dim], tf.float32),
         'example': tf.io.FixedLenFeature([wide*feature_dim], tf.float32),
     }
     example = tf.io.parse_single_example(example, example_description)
     feature = decode_feature(example['example'], wide, feature_dim)
-    label = example['class']
+    label = example['label']
     return feature, label
 
 def load_dataset(tfrec_path, wide, feature_dim, out_dim):

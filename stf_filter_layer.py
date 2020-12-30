@@ -1,4 +1,5 @@
 import tensorflow as tf
+import ops
 
 class STFFilterLayer(tf.keras.layers.Layer):
 
@@ -25,8 +26,10 @@ class STFFilterLayer(tf.keras.layers.Layer):
 		self.zeros_initializer = tf.zeros_initializer()
 
 	def call(self, inputs):
-		patch_kernel_dict, patch_bias = self._initialize_stf_filters(self.c_in, self.c_out, self.fft_list, 
-			self.fft_list[1], use_bias=True, name='patch_filter')
+		patch_kernel_dict, patch_bias = self._initialize_stf_filters(self.c_in, 
+																	self.c_out, 
+																	self.fft_list, 
+																	self.fft_list[1])
 
 		# [batch, feature, time]
 		inputs = tf.transpose(inputs, [0, 2, 1])
@@ -73,18 +76,18 @@ class STFFilterLayer(tf.keras.layers.Layer):
 					
 					patch_fft_mod = tf.transpose(patch_fft_mod, [0, 1, 3, 4, 2])
 
-					merge_kernel, merge_bias = self._complex_merge(time_ratio)
+					merge_kernel, merge_bias = self.__complex_merge(time_ratio)
 					
-					patch_fft_mod = self._atten_merge(patch_fft_mod, merge_kernel, merge_bias)*float(time_ratio)
+					patch_fft_mod = ops.atten_merge(patch_fft_mod, merge_kernel, merge_bias)*float(time_ratio)
 					
 					patch_mask = tf.ones_like(patch_fft_mod)
-					patch_mask = self._zero_interp(patch_mask, time_ratio, inputs.shape[-1]/tar_fft_n, 
+					patch_mask = self.__zero_interp(patch_mask, time_ratio, inputs.shape[-1]/tar_fft_n, 
 									int(fft_n/2)+1, int(tar_fft_n/2)+1, self.c_in)
 					for exist_mask in patch_mask_list[fft_idx2]:
 						patch_mask = patch_mask - exist_mask
 					patch_mask_list[fft_idx2].append(patch_mask)
 
-					patch_fft_mod = self._zero_interp(patch_fft_mod, time_ratio, inputs.shape[-1]/tar_fft_n, 
+					patch_fft_mod = self.__zero_interp(patch_fft_mod, time_ratio, inputs.shape[-1]/tar_fft_n, 
 									int(fft_n/2)+1, int(tar_fft_n/2)+1, self.c_in)
 
 					patch_fft_list[fft_idx2] = patch_fft_list[fft_idx2] + patch_mask*patch_fft_mod
@@ -139,35 +142,39 @@ class STFFilterLayer(tf.keras.layers.Layer):
 								c_in, 
 								c_out_total, 
 								fft_list, 
-								fft_n, 
+								basic_len, 
 								filter_type='complex', 
-								use_bias=True, 
-								name='stf_filters'):
+								use_bias=True):
 		'''
 		Initialize STF-Filters
 		Args:
 			c_in: Input channel size
 			c_out_total: Output channel size
 			fft_list: Multi-dimensional stft segment frame lengths
-			fft_n: Default kernel length? 
+			basic_len: Default kernel length
 			filter_type: Filter type. 'complex' creates seperate kernels for the 
 				real and imagine parts. 'real' only creates a kernel for the real 
 				part and masks the imagine part 
 			use_bias: A boolean value. Whether use bias or not.
 		'''
 		c_out = int(c_out_total/len(fft_list))
-	
+		
 		kernel_r = self.glorot_initializer(
-			shape=(1, 1, int(fft_n/2+1), c_in*c_out))
+			shape=(1, 1, int(basic_len/2+1), c_in*c_out))
 		kernel_i = self.glorot_initializer(
-			shape=(1, 1, int(fft_n/2+1), c_in*c_out))
-
+			shape=(1, 1, int(basic_len/2+1), c_in*c_out))
 		kernel_complex_org = tf.complex(kernel_r, kernel_i)
+
+		# kernel = self.glorot_initializer(
+		# 	shape=[1, 1, c_in*c_out, basic_len])
+		# kernel_complex_org = tf.signal.fft(tf.complex(kernel, 0.*kernel))
+		# kernel_complex_org = tf.transpose(kernel_complex_org, [0, 1, 3, 2])
+		# kernel_complex_org = kernel_complex_org[:,:,:int(int(basic_len)/2+1),:]
 
 		kernel_complex_dict = {}
 		for fft_elem in fft_list:
-			# If fft_elem < fft_n, shrink the initialized kernel
-			if fft_elem != fft_n:
+			# If fft_elem < basic_len, shrink the initialized kernel
+			if fft_elem != basic_len:
 				kernel_complex_r = tf.image.resize(tf.math.real(kernel_complex_org), 
 						[1, int(fft_elem/2)+1])
 				kernel_complex_i = tf.image.resize(tf.math.imag(kernel_complex_org), 
@@ -182,23 +189,12 @@ class STFFilterLayer(tf.keras.layers.Layer):
 			bias_complex_r = self.glorot_initializer(shape=[c_out*len(fft_list)])
 			bias_complex_i = self.glorot_initializer(shape=[c_out*len(fft_list)])
 
-			bias_complex = tf.complex(bias_complex_r, bias_complex_i, name='bias')
+			bias_complex = tf.complex(bias_complex_r, bias_complex_i)
 			return kernel_complex_dict, bias_complex
 		else:
 			return kernel_complex_dict
 
-	def _atten_merge(self, patch, kernel, bias):
-		## patch with shape (BATCH_SIZE, seg_num, ffn/2+1, c_in, ratio)
-		## kernel with shape (1, 1, 1, 1, ratio, ratio)
-		## bias with shape (ratio)
-		patch_atten = tf.reduce_sum(tf.expand_dims(patch, 5)*kernel, 4)
-		patch_atten = tf.abs(tf.nn.bias_add(patch_atten, bias))
-		patch_atten = tf.nn.softmax(patch_atten)
-		patch_atten = tf.complex(patch_atten, 0*patch_atten)
-
-		return tf.reduce_sum(patch*patch_atten, 4)
-
-	def _zero_interp(self, in_patch, ratio, seg_num, in_fft_n, out_fft_n, f_dim):
+	def __zero_interp(self, in_patch, ratio, seg_num, in_fft_n, out_fft_n, f_dim):
 		in_patch = tf.expand_dims(in_patch, 3)
 		in_patch_zero = tf.tile(tf.zeros_like(in_patch),
 							[1, 1, 1, ratio-1, 1])
@@ -206,7 +202,7 @@ class STFFilterLayer(tf.keras.layers.Layer):
 					[-1, int(seg_num), int(in_fft_n*ratio), int(f_dim)])
 		return in_patch[:,:,:out_fft_n,:]
 
-	def _complex_merge(self, merge_ratio):
+	def __complex_merge(self, merge_ratio):
 		# kernel = tf.Variable(lambda: tf.zeros_initializer()(
 		# 	shape=[1, 1, 1, 1, merge_ratio, 2*(merge_ratio+1)]))
 		kernel = self.zeros_initializer(
@@ -223,6 +219,6 @@ class STFFilterLayer(tf.keras.layers.Layer):
 			shape=(merge_ratio))
 		bias_complex_i = self.zeros_initializer(
 			shape=(merge_ratio))
-		bias_complex = tf.complex(bias_complex_r, bias_complex_i, name='bias')
+		bias_complex = tf.complex(bias_complex_r, bias_complex_i)
 
 		return kernel_complex, bias_complex

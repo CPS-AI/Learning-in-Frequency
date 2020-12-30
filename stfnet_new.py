@@ -4,6 +4,7 @@ import math
 import tensorflow as tf
 
 from stf_filter_layer import STFFilterLayer
+from stf_conv_layer import STFConvLayer
 
 class STFNet(tf.keras.Model):
 	def __init__(self, 
@@ -31,55 +32,55 @@ class STFNet(tf.keras.Model):
 		self.sensor_dropout_layers = []
 
 		for s in range(sensor_number):
-			self.sensor_stf_layers.append(self.create_stf_layer(
+			self.sensor_stf_layers.append(self.__create_stf_layer(
 								sensor_channel, 
 								c_out, 
 								"sensor{}_stf1".format(s)))
 			self.sensor_dropout_layers.append(
-				self.create_dropout_layer([batch_size, 1, c_out], 
+				self.__create_dropout_layer([batch_size, 1, c_out], 
 								"sensor{}_dropout1".format(s)))
 			
-			self.sensor_stf_layers.append(self.create_stf_layer(
+			self.sensor_stf_layers.append(self.__create_stf_layer(
 								c_out,
 								c_out, 
 								"sensor{}_stf2".format(s)))
 			self.sensor_dropout_layers.append(
-				self.create_dropout_layer([batch_size, 1, c_out], 
+				self.__create_dropout_layer([batch_size, 1, c_out], 
 								"sensor{}_dropout2".format(s)))
 
-			self.sensor_stf_layers.append(self.create_stf_layer(
+			self.sensor_stf_layers.append(self.__create_stf_layer(
 								c_out, 
 								c_out//sensor_number, 
 								"sensor{}_stf3".format(s)))
 			self.sensor_dropout_layers.append(
-				self.create_dropout_layer([batch_size, 1, c_out//sensor_number], 
+				self.__create_dropout_layer([batch_size, 1, c_out//sensor_number], 
 								"sensor{}_dropout3".format(s)))
 
-		self.fusion_layer1 = self.create_stf_layer(
+		self.fusion_layer1 = self.__create_stf_layer(
 								c_out//sensor_number * sensor_number,
 								c_out,
 								"fusion_stf1")
-		self.fusion_dropout1 = self.create_dropout_layer([batch_size, 1, c_out],
+		self.fusion_dropout1 = self.__create_dropout_layer([batch_size, 1, c_out],
 								"fusion_dropout1")
 			
-		self.fusion_layer2 = self.create_stf_layer(
+		self.fusion_layer2 = self.__create_stf_layer(
 								c_out,
 								c_out,
 								"fusion_stf2")
-		self.fusion_dropout2 = self.create_dropout_layer([batch_size, 1, c_out],
+		self.fusion_dropout2 = self.__create_dropout_layer([batch_size, 1, c_out],
 								"fusion_dropout2")
 
-		self.fusion_layer3 = self.create_stf_layer(
+		self.fusion_layer3 = self.__create_stf_layer(
 								c_out,
 								c_out,
 								"fusion_stf3")
-		self.fusion_dropout3 = self.create_dropout_layer([batch_size, 1, c_out],
+		self.fusion_dropout3 = self.__create_dropout_layer([batch_size, 1, c_out],
 								"fusion_dropout3")
 
 		self.final_dense = tf.keras.layers.Dense(class_num, 
 								name='final_dense')
 
-	def create_stf_layer(self, c_in, c_out, name):
+	def __create_stf_layer(self, c_in, c_out, name):
 		if self.layer_type == 'filter':
 			layer = STFFilterLayer(self.fft_list, 
 								self.kernel_size,
@@ -89,7 +90,7 @@ class STFNet(tf.keras.Model):
 								name
 							)
 		else: 
-			layer = STFFilterLayer(self.fft_list, 
+			layer = STFConvLayer(self.fft_list, 
 								self.kernel_size,
 								c_in, 
 								c_out,
@@ -99,7 +100,7 @@ class STFNet(tf.keras.Model):
 
 		return layer
 
-	def create_dropout_layer(self, noise_shape, name):
+	def __create_dropout_layer(self, noise_shape, name):
 		layer = tf.keras.layers.Dropout(self.dropout_rate,
 								noise_shape=noise_shape,
 								name=name)
