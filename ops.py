@@ -13,7 +13,7 @@ def atten_merge(patch, kernel, bias):
 
 	return tf.reduce_sum(patch*patch_atten, 4)
 
-def multi_dimension_stft(inputs, fft_list):
+def multi_resolution_stft(inputs, fft_list):
 	'''
 		inputs: with shape: [batch, time_series, feature]
 	'''
@@ -37,8 +37,10 @@ def multi_dimension_stft(inputs, fft_list):
 							patch_mask_list, 
 							fft_n,
 							fft_list,
-							inputs.shape[1])
-		
+							inputs.shape[-1])
+
+	return patch_fft_list, patch_mask_list
+
 def hologram_interleave(patch_fft, 
 						patch_fft_list, 
 						patch_mask_list, 
@@ -82,8 +84,6 @@ def hologram_interleave(patch_fft,
 			patch_fft_list[fft_idx] = patch_fft_list[fft_idx] + patch_mask*patch_fft_mod
 
 def complex_merge(merge_ratio):
-	# kernel = tf.Variable(lambda: tf.zeros_initializer()(
-	# 	shape=[1, 1, 1, 1, merge_ratio, 2*(merge_ratio+1)]))
 	kernel = tf.zeros_initializer()(
 		shape=(1, 1, 1, 1, merge_ratio, 2*(merge_ratio+1)))
 	kernel_complex = tf.signal.fft(tf.complex(kernel, 0.*kernel))

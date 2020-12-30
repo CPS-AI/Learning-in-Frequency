@@ -36,64 +36,10 @@ class STFConvLayer(tf.keras.layers.Layer):
 
 		# [batch, feature, time]
 		inputs = tf.transpose(inputs, [0, 2, 1])
-			
-		patch_fft_list = []
-		patch_mask_list = []
-		for idx in range(len(self.fft_list)):
-			patch_fft_list.append(0.)
-			patch_mask_list.append([])
-
-		for fft_idx, fft_n in enumerate(self.fft_list):
-			## patch_fft with shape (batch, c_in, seg_num, fft_n//2+1)
-			# if pooling:
-			# 	in_f_step = fft_list[fft_idx]
-			# 	patch_fft =  tf.contrib.signal.stft(inputs, 
-			# 					window_fn=None,
-			# 					frame_length=in_f_step, frame_step=in_f_step, fft_length=in_f_step)
-			# 	patch_fft = patch_fft[:,:,:,:int(fft_n/2)+1]
-			# else:
-
-			# [batch, feature, time, freq]
-			patch_fft =  tf.signal.stft(inputs, 
-							window_fn=None,
-							frame_length=fft_n, 
-							frame_step=fft_n, 
-							fft_length=fft_n)
-			# [batch, time, freq, feature]
-			patch_fft = tf.transpose(patch_fft, [0, 2, 3, 1])
-			# patch_fft_list[fft_idx] = patch_fft
-
-			# Hologram Interleaving
-			for fft_idx2, tar_fft_n in enumerate(self.fft_list):
-				if tar_fft_n < fft_n:
-					continue
-				elif tar_fft_n == fft_n:
-					patch_mask = tf.ones_like(patch_fft)
-					for exist_mask in patch_mask_list[fft_idx2]:
-						patch_mask = patch_mask - exist_mask
-					patch_fft_list[fft_idx2] = patch_fft_list[fft_idx2] + patch_mask*patch_fft
-				else:
-					time_ratio = tar_fft_n//fft_n
-					patch_fft_mod = tf.reshape(patch_fft, 
-						[-1, inputs.shape[-1]//tar_fft_n, time_ratio, fft_n//2+1, self.c_in])
-					
-					patch_fft_mod = tf.transpose(patch_fft_mod, [0, 1, 3, 4, 2])
-
-					merge_kernel, merge_bias = self.__complex_merge(time_ratio)
-					
-					patch_fft_mod = ops.atten_merge(patch_fft_mod, merge_kernel, merge_bias)*float(time_ratio)
-					
-					patch_mask = tf.ones_like(patch_fft_mod)
-					patch_mask = self.__zero_interp(patch_mask, time_ratio, inputs.shape[-1]//tar_fft_n, 
-									fft_n//2+1, tar_fft_n//2+1, self.c_in)
-					for exist_mask in patch_mask_list[fft_idx2]:
-						patch_mask = patch_mask - exist_mask
-					patch_mask_list[fft_idx2].append(patch_mask)
-
-					patch_fft_mod = self.__zero_interp(patch_fft_mod, time_ratio, inputs.shape[-1]//tar_fft_n, 
-									fft_n//2+1, tar_fft_n//2+1, self.c_in)
-
-					patch_fft_list[fft_idx2] = patch_fft_list[fft_idx2] + patch_mask*patch_fft_mod
+		
+		patch_fft_list, patch_mask_list = ops.multi_resolution_stft(
+			inputs, self.fft_list
+		)
 
 		# Do conv
 		patch_time_list = []
