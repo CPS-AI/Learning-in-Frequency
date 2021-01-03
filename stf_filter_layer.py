@@ -3,7 +3,9 @@ import ops
 
 
 class STFFilterLayer(tf.keras.layers.Layer):
-	def __init__(self, fft_list, kernel_size, c_in, c_out, act_domain, name):
+	def __init__(self, fft_list, kernel_size, c_in, c_out, act_domain, 
+		kernel_domain='complex',
+		name='stf_filter_layer'):
 		"""
 		Args:
 			input:
@@ -15,13 +17,14 @@ class STFFilterLayer(tf.keras.layers.Layer):
 		self.c_in = c_in
 		self.c_out = c_out
 		self.act_domain = act_domain
+		self.kernel_domain = kernel_domain
 
 		self.glorot_initializer = tf.keras.initializers.glorot_uniform()
 		self.zeros_initializer = tf.zeros_initializer()
 
 	def call(self, inputs):
 		patch_kernel_dict, patch_bias = self.__initialize_stf_filters(
-			self.c_in, self.c_out, self.fft_list, self.fft_list[1]
+			self.c_in, self.c_out
 		)
 
 		# [batch, feature, time]
@@ -31,15 +34,13 @@ class STFFilterLayer(tf.keras.layers.Layer):
 			inputs, self.fft_list
 		)
 
-		# Do filtering
 		patch_time_list = []
 		for fft_idx, fft_n in enumerate(self.fft_list):
-			# f_step = f_step_list[fft_idx]
 			k_len = self.kernel_size
-			d_len = int(fft_n / self.fft_list[0])
+			d_len = fft_n // self.fft_list[0]
 			paddings = [
-				int((k_len * d_len - d_len) / 2),
-				int((k_len * d_len - d_len) / 2),
+				(k_len * d_len - d_len) // 2,
+				(k_len * d_len - d_len) // 2,
 			]
 
 			patch_fft = patch_fft_list[fft_idx]
@@ -51,7 +52,7 @@ class STFFilterLayer(tf.keras.layers.Layer):
 			patch_fft = tf.complex(patch_fft_r, patch_fft_i)
 			patch_fft = tf.tile(
 				tf.expand_dims(patch_fft, 4),
-				[1, 1, 1, 1, int(self.c_out / len(self.fft_list))],
+				[1, 1, 1, 1, self.c_out // len(self.fft_list)],
 			)
 			patch_fft_out = patch_fft * patch_kernel
 			patch_fft_out = tf.reduce_sum(patch_fft_out, 3)
@@ -91,8 +92,6 @@ class STFFilterLayer(tf.keras.layers.Layer):
 		self,
 		c_in,
 		c_out_total,
-		fft_list,
-		basic_len,
 		filter_type="complex",
 		use_bias=True,
 	):
@@ -108,75 +107,48 @@ class STFFilterLayer(tf.keras.layers.Layer):
 				part and masks the imagine part 
 			use_bias: A boolean value. Whether use bias or not.
 		"""
-		c_out = int(c_out_total / len(fft_list))
+		basic_len = self.fft_list[1]
+		c_out = c_out_total // len(self.fft_list)
 
-		kernel_r = self.glorot_initializer(
-			shape=(1, 1, int(basic_len / 2 + 1), c_in * c_out)
-		)
-		kernel_i = self.glorot_initializer(
-			shape=(1, 1, int(basic_len / 2 + 1), c_in * c_out)
-		)
-		kernel_complex_org = tf.complex(kernel_r, kernel_i)
-
-		# kernel = self.glorot_initializer(
-		# 	shape=[1, 1, c_in*c_out, basic_len])
-		# kernel_complex_org = tf.signal.fft(tf.complex(kernel, 0.*kernel))
-		# kernel_complex_org = tf.transpose(kernel_complex_org, [0, 1, 3, 2])
-		# kernel_complex_org = kernel_complex_org[:,:,:int(int(basic_len)/2+1),:]
-
+		if self.kernel_domain == 'real':
+			kernel = self.glorot_initializer(
+				shape=(1, 1, c_in * c_out, basic_len)
+			)
+			kernel_complex_org = tf.signal.fft(tf.complex(kernel, 0.*kernel))
+			kernel_complex_org = tf.transpose(kernel_complex_org, [0, 1, 3, 2])
+			kernel_complex_org = kernel_complex_org[:,:,:basic_len//2+1,:]
+		else:
+			kernel_r = self.glorot_initializer(
+				shape=(1, 1, basic_len // 2 + 1, c_in * c_out)
+			)
+			kernel_i = self.glorot_initializer(
+				shape=(1, 1, basic_len // 2 + 1, c_in * c_out)
+			)
+			kernel_complex_org = tf.complex(kernel_r, kernel_i)
+		
 		kernel_complex_dict = {}
-		for fft_elem in fft_list:
+		for fft_elem in self.fft_list:
 			# If fft_elem < basic_len, shrink the initialized kernel
 			if fft_elem != basic_len:
 				kernel_complex_r = tf.image.resize(
-					tf.math.real(kernel_complex_org), [1, int(fft_elem / 2) + 1]
+					tf.math.real(kernel_complex_org), [1, fft_elem // 2 + 1]
 				)
 				kernel_complex_i = tf.image.resize(
-					tf.math.imag(kernel_complex_org), [1, int(fft_elem / 2) + 1]
+					tf.math.imag(kernel_complex_org), [1, fft_elem // 2 + 1]
 				)
 				kernel_complex_dict[fft_elem] = tf.reshape(
 					tf.complex(kernel_complex_r, kernel_complex_i),
-					[1, 1, int(fft_elem / 2) + 1, c_in, c_out],
+					[1, 1, fft_elem // 2 + 1, c_in, c_out],
 				)
 			else:
 				kernel_complex_dict[fft_elem] = tf.reshape(
-					kernel_complex_org, [1, 1, int(fft_elem / 2) + 1, c_in, c_out]
+					kernel_complex_org, [1, 1, fft_elem // 2 + 1, c_in, c_out]
 				)
 
 		if use_bias:
-			bias_complex_r = self.glorot_initializer(shape=[c_out * len(fft_list)])
-			bias_complex_i = self.glorot_initializer(shape=[c_out * len(fft_list)])
-
+			bias_complex_r = self.glorot_initializer(shape=[c_out * len(self.fft_list)])
+			bias_complex_i = self.glorot_initializer(shape=[c_out * len(self.fft_list)])
 			bias_complex = tf.complex(bias_complex_r, bias_complex_i)
 			return kernel_complex_dict, bias_complex
 		else:
 			return kernel_complex_dict
-
-	def __zero_interp(self, in_patch, ratio, seg_num, in_fft_n, out_fft_n, f_dim):
-		in_patch = tf.expand_dims(in_patch, 3)
-		in_patch_zero = tf.tile(tf.zeros_like(in_patch), [1, 1, 1, ratio - 1, 1])
-		in_patch = tf.reshape(
-			tf.concat([in_patch, in_patch_zero], 3),
-			[-1, int(seg_num), int(in_fft_n * ratio), int(f_dim)],
-		)
-		return in_patch[:, :, :out_fft_n, :]
-
-	def __complex_merge(self, merge_ratio):
-		# kernel = tf.Variable(lambda: tf.zeros_initializer()(
-		# 	shape=[1, 1, 1, 1, merge_ratio, 2*(merge_ratio+1)]))
-		kernel = self.zeros_initializer(
-			shape=(1, 1, 1, 1, merge_ratio, 2 * (merge_ratio + 1))
-		)
-		kernel_complex = tf.signal.fft(tf.complex(kernel, 0.0 * kernel))
-		kernel_complex = kernel_complex[:, :, :, :, :, 1 : (merge_ratio + 1)]
-		kernel_complex = tf.transpose(kernel_complex, [0, 1, 2, 3, 5, 4])
-
-		# bias_complex_r = tf.Variable(lambda: tf.zeros_initializer()(
-		# 	shape=[merge_ratio]))
-		# bias_complex_i = tf.Variable(lambda: tf.zeros_initializer()(
-		# 	shape=[merge_ratio]))
-		bias_complex_r = self.zeros_initializer(shape=(merge_ratio))
-		bias_complex_i = self.zeros_initializer(shape=(merge_ratio))
-		bias_complex = tf.complex(bias_complex_r, bias_complex_i)
-
-		return kernel_complex, bias_complex
