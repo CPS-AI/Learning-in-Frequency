@@ -15,7 +15,7 @@ def atten_merge(patch, kernel, bias):
 
 def multi_resolution_stft(inputs, fft_list):
 	'''
-		inputs: with shape: [batch, time_series, feature]
+		inputs: with shape: [batch, feature, time_series]
 	'''
 	patch_fft_list = []
 	patch_mask_list = []
