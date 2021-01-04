@@ -9,8 +9,8 @@ class STFConvLayer(tf.keras.layers.Layer):
 				c_in,
 				c_out, 
 				act_domain,
-				name,
-				kernel_domain='freq'
+				kernel_domain='freq',
+				name='stf_conv_layer'
 				):
 		'''
 		Args:
@@ -41,7 +41,7 @@ class STFConvLayer(tf.keras.layers.Layer):
 			inputs, self.fft_list
 		)
 
-		# Do conv
+		# Do convolution
 		patch_time_list = []
 		for fft_idx, fft_n in enumerate(self.fft_list):
 			# f_step = f_step_list[fft_idx]
@@ -120,13 +120,13 @@ class STFConvLayer(tf.keras.layers.Layer):
 		if self.kernel_domain == 'freq':
 			kernel_r = self.glorot_initializer(shape=[1, basic_len, c_in, c_out])
 			kernel_i = self.glorot_initializer(shape=[1, basic_len, c_in, c_out])			
-		elif self.kernel_domain == 'time':
+		else:
 			kernel = self.glorot_initializer(shape=[1, basic_len, c_out, 2*(c_in+1)])
 			kernel_c = tf.signal.fft(tf.complex(kernel, 0.*kernel))
 			kernel_c = kernel_c[:, :, :, 1:(c_in+1)]
 			kernel_c = tf.transpose(kernel_c, [0, 1, 3, 2])
-			kernel_r = tf.real(kernel_c)
-			kernel_i = tf.imag(kernel_c)
+			kernel_r = tf.math.real(kernel_c)
+			kernel_i = tf.math.imag(kernel_c)
 
 		kernel_dict = {}
 		kernel_dict[basic_len] = [kernel_r, kernel_i]
@@ -138,32 +138,3 @@ class STFConvLayer(tf.keras.layers.Layer):
 			return kernel_dict, bias_complex
 		else:
 			return kernel_dict
-
-	def __zero_interp(self, in_patch, ratio, seg_num, in_fft_n, out_fft_n, f_dim):
-		in_patch = tf.expand_dims(in_patch, 3)
-		in_patch_zero = tf.tile(tf.zeros_like(in_patch),
-							[1, 1, 1, ratio-1, 1])
-		in_patch = tf.reshape(tf.concat([in_patch, in_patch_zero], 3), 
-					[-1, int(seg_num), int(in_fft_n*ratio), int(f_dim)])
-		return in_patch[:,:,:out_fft_n,:]
-
-	def __complex_merge(self, merge_ratio):
-		# kernel = tf.Variable(lambda: tf.zeros_initializer()(
-		# 	shape=[1, 1, 1, 1, merge_ratio, 2*(merge_ratio+1)]))
-		kernel = self.zeros_initializer(
-			shape=(1, 1, 1, 1, merge_ratio, 2*(merge_ratio+1)))
-		kernel_complex = tf.signal.fft(tf.complex(kernel, 0.*kernel))
-		kernel_complex = kernel_complex[:, :, :, :, :, 1:(merge_ratio+1)]
-		kernel_complex = tf.transpose(kernel_complex, [0, 1, 2, 3, 5, 4])
-
-		# bias_complex_r = tf.Variable(lambda: tf.zeros_initializer()(
-		# 	shape=[merge_ratio]))
-		# bias_complex_i = tf.Variable(lambda: tf.zeros_initializer()(
-		# 	shape=[merge_ratio]))
-		bias_complex_r = self.zeros_initializer(
-			shape=(merge_ratio))
-		bias_complex_i = self.zeros_initializer(
-			shape=(merge_ratio))
-		bias_complex = tf.complex(bias_complex_r, bias_complex_i)
-
-		return kernel_complex, bias_complex
