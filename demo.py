@@ -5,8 +5,6 @@ import tensorflow as tf
 from tfrecord_utils import get_dataset
 from stfnet_new import STFNet
 
-# model = STFNet(LAYER_TYPE, CLASS_NUM, SENSOR_NUM, SENSOR_CHANNEL, BATCH_SIZE)
-
 LAYER_TYPE = "conv"
 BATCH_SIZE = 32
 SERIES_SIZE = 512
@@ -17,44 +15,35 @@ CLASS_NUM = 10
 EPOCH_NUM = 10000000
 SAVE_EPOCH_NUM = 500
 
-# TRAIN_TFRECORD = os.path.join("tfrecords", "train_0-17siebel_all_speaker.tfrecord")
-# TEST_TFRECORD = os.path.join("tfrecords", "eval_0-17siebel_all_speaker.tfrecord")
+TRAIN_TFRECORD = os.path.join("tfrecords", "speech", "train.tfrecord")
+TEST_TFRECORD = os.path.join("tfrecords", "speech", "train.tfrecord")
 
-TRAIN_TFRECORD = os.path.join("tfrecords", "New10Digits", "train.tfrecord")
-TEST_TFRECORD = os.path.join("tfrecords", "New10Digits", "eval.tfrecord")
+# TRAIN_TFRECORD = os.path.join("tfrecords", "hhar", "train.tfrecord")
+# TEST_TFRECORD = os.path.join("tfrecords", "hhar", "eval.tfrecord")
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-
 def main():
     dataset_train = get_dataset(
-        TRAIN_TFRECORD, BATCH_SIZE, SERIES_SIZE, SENSOR_CHANNEL * SENSOR_NUM, CLASS_NUM
+        TRAIN_TFRECORD, 
+        BATCH_SIZE, 
+        SERIES_SIZE, 
+        SENSOR_NUM, 
+        SENSOR_CHANNEL,
+        CLASS_NUM
     )
+    # dataset_train = dataset_train.repeat(-1)
+
     dataset_eval = get_dataset(
         TEST_TFRECORD,
         BATCH_SIZE,
         SERIES_SIZE,
-        SENSOR_CHANNEL * SENSOR_NUM,
+        SENSOR_NUM,
+        SENSOR_CHANNEL,
         CLASS_NUM,
         shuffle_sample=False,
     )
-
-    batch_feature_train, batch_label_train = next(iter(dataset_train))
-    batch_feature_train = tf.reshape(
-        batch_feature_train, [BATCH_SIZE, SERIES_SIZE, SENSOR_NUM * SENSOR_CHANNEL]
-    )
-
-    batch_feature_eval, batch_label_eval = next(iter(dataset_eval))
-    batch_feature_eval = tf.reshape(
-        batch_feature_eval, [BATCH_SIZE, SERIES_SIZE, SENSOR_NUM * SENSOR_CHANNEL]
-    )
-
-    print(
-        "batch_feature_train.shape = {}, batch_label_train.shape = {}".format(
-            batch_feature_train.get_shape().as_list(),
-            batch_label_train.get_shape().as_list(),
-        )
-    )
+    # dataset_eval = dataset_eval.repeat(-1)
 
     model = STFNet(LAYER_TYPE, CLASS_NUM, SENSOR_NUM, SENSOR_CHANNEL, BATCH_SIZE)
 
@@ -76,13 +65,12 @@ def main():
     )
 
     model.fit(
-        batch_feature_train,
-        batch_label_train,
+        dataset_train,
+        # steps_per_epoch=10,
         epochs=EPOCH_NUM,
-        validation_data=[batch_feature_eval, batch_label_eval],
-        callbacks=[cp_callback],
-    )
-
+        validation_data=dataset_eval,
+        callbacks=[cp_callback]
+    )    
 
 if __name__ == "__main__":
     main()
