@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 
 from tfrecord_utils import get_dataset
-from stfnet_new import STFNet
+from stfnet import STFNet
 
 LAYER_TYPE = "conv"
 BATCH_SIZE = 32
@@ -32,7 +32,6 @@ def main():
         SENSOR_CHANNEL,
         CLASS_NUM
     )
-    # dataset_train = dataset_train.repeat(-1)
 
     dataset_eval = get_dataset(
         TEST_TFRECORD,
@@ -43,7 +42,6 @@ def main():
         CLASS_NUM,
         shuffle_sample=False,
     )
-    # dataset_eval = dataset_eval.repeat(-1)
 
     model = STFNet(LAYER_TYPE, CLASS_NUM, SENSOR_NUM, SENSOR_CHANNEL, BATCH_SIZE)
 
